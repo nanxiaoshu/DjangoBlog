@@ -1,22 +1,20 @@
-import uuid
-
-from django.shortcuts import render
-
+import datetime
+import logging
 # Create your views here.
 import os
-import datetime
-from django.views.generic.list import ListView
-from django.views.generic.detail import DetailView
+import uuid
+
 from django.conf import settings
-from django import forms
-from django.http import HttpResponse, HttpResponseRedirect, HttpResponseForbidden
-from django.views.decorators.csrf import csrf_exempt
-from django.contrib.auth.decorators import login_required
-from DjangoBlog.utils import cache, get_sha256, get_blog_setting
+from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404
+from django.shortcuts import render
+from django.views.decorators.csrf import csrf_exempt
+from django.views.generic.detail import DetailView
+from django.views.generic.list import ListView
+
 from blog.models import Article, Category, Tag, Links, LinkShowType
 from comments.forms import CommentForm
-import logging
+from djangoblog.utils import cache, get_sha256, get_blog_setting
 
 logger = logging.getLogger(__name__)
 
@@ -118,17 +116,7 @@ class ArticleDetailView(DetailView):
         return obj
 
     def get_context_data(self, **kwargs):
-        articleid = int(self.kwargs[self.pk_url_kwarg])
         comment_form = CommentForm()
-        user = self.request.user
-        # 如果用户已经登录，则隐藏邮件和用户名输入框
-        if user.is_authenticated and not user.is_anonymous and user.email and user.username:
-            comment_form.fields.update({
-                'email': forms.CharField(widget=forms.HiddenInput()),
-                'name': forms.CharField(widget=forms.HiddenInput()),
-            })
-            comment_form.fields["email"].initial = user.email
-            comment_form.fields["name"].initial = user.username
 
         article_comments = self.object.comment_list()
 
@@ -296,7 +284,9 @@ def fileupload(request):
                 type='files' if not isimage else 'image', timestr=timestr, filename=filename)
             if not os.path.exists(basepath):
                 os.makedirs(basepath)
-            savepath = os.path.join(basepath, f"{uuid.uuid4().hex}{os.path.splitext(filename)[-1]}")
+            savepath = os.path.normpath(os.path.join(basepath, f"{uuid.uuid4().hex}{os.path.splitext(filename)[-1]}"))
+            if not savepath.startswith(basepath):
+                return HttpResponse("only for post")
             with open(savepath, 'wb+') as wfile:
                 for chunk in request.FILES[filename].chunks():
                     wfile.write(chunk)
@@ -309,22 +299,6 @@ def fileupload(request):
 
     else:
         return HttpResponse("only for post")
-
-
-@login_required
-def refresh_memcache(request):
-    try:
-
-        if request.user.is_superuser:
-            from DjangoBlog.utils import cache
-            if cache and cache is not None:
-                cache.clear()
-            return HttpResponse("ok")
-        else:
-            return HttpResponseForbidden()
-    except Exception as e:
-        logger.error(e)
-        return HttpResponse("error")
 
 
 def page_not_found_view(

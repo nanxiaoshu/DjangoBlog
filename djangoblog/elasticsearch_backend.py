@@ -1,28 +1,11 @@
-#!/usr/bin/env python
-# encoding: utf-8
-"""
-@version: ??
-@author: liangliangyy
-@license: MIT Licence
-@contact: liangliangyy@gmail.com
-@site: https://www.lylinux.net/
-@software: PyCharm
-@file: elasticsearch_backend.py
-@time: 2019-04-13 11:46
-"""
-
-import logging
-import re
 from django.utils.encoding import force_text
-
 from elasticsearch_dsl import Q
-
-from haystack.backends import BaseEngine, BaseSearchBackend, BaseSearchQuery, EmptyResults, log_query
+from haystack.backends import BaseEngine, BaseSearchBackend, BaseSearchQuery, log_query
 from haystack.models import SearchResult
 from haystack.utils import log as logging
 
-from blog.models import Article
 from blog.documents import ArticleDocument, ArticleDocumentManager
+from blog.models import Article
 
 logger = logging.getLogger(__name__)
 
@@ -35,10 +18,6 @@ class ElasticSearchBackend(BaseSearchBackend):
             connection_alias,
             **connection_options)
         self.manager = ArticleDocumentManager()
-        # try:
-        #     self._rebuild(None)
-        # except:
-        #     pass
 
     def _get_models(self, iterable):
         models = iterable if iterable and iterable[0] else Article.objects.all()
@@ -95,9 +74,6 @@ class ElasticSearchBackend(BaseSearchBackend):
             app_label = 'blog'
             model_name = 'Article'
             additional_fields = {}
-
-            # if 'highlight' in raw_result:
-            #     additional_fields['highlighted'] = raw_result['highlight'].get(content_field, '')
 
             result_class = SearchResult
 

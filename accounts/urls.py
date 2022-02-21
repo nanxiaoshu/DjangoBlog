@@ -1,21 +1,6 @@
-#!/usr/bin/env python
-# encoding: utf-8
-
-
-"""
-@version: ??
-@author: liangliangyy
-@license: MIT Licence
-@contact: liangliangyy@gmail.com
-@site: https://www.lylinux.net/
-@software: PyCharm
-@file: urls.py
-@time: 2016/11/20 下午3:52
-"""
-
 from django.conf.urls import url
-from django.contrib.auth import views as auth_view
 from django.urls import path
+
 from . import views
 from .forms import LoginForm
 
@@ -33,4 +18,11 @@ urlpatterns = [url(r'^login/$',
                    name='logout'),
                path(r'account/result.html',
                     views.account_result,
-                    name='result')]
+                    name='result'),
+               url(r'^forget_password/$',
+                   views.ForgetPasswordView.as_view(),
+                   name='forget_password'),
+               url(r'^forget_password_code/$',
+                   views.ForgetPasswordEmailCode.as_view(),
+                   name='forget_password_code'),
+               ]

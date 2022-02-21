@@ -1,17 +1,18 @@
-from django.test import Client, RequestFactory, TestCase
-from blog.models import Article, Category, Tag, SideBar, Links
-from django.contrib.auth import get_user_model
-from DjangoBlog.utils import get_current_site, get_sha256
-from blog.forms import BlogSearchForm
-from django.core.paginator import Paginator
-from blog.templatetags.blog_tags import load_pagination_info, load_articletags
-from accounts.models import BlogUser
-from django.core.files.uploadedfile import SimpleUploadedFile
+import os
+
 from django.conf import settings
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.management import call_command
+from django.core.paginator import Paginator
+from django.test import Client, RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
-import os
-from django.core.management import call_command
+
+from accounts.models import BlogUser
+from blog.forms import BlogSearchForm
+from blog.models import Article, Category, Tag, SideBar, Links
+from blog.templatetags.blog_tags import load_pagination_info, load_articletags
+from djangoblog.utils import get_current_site, get_sha256
 
 
 # Create your tests here.
@@ -84,7 +85,7 @@ class ArticleTest(TestCase):
 
         response = self.client.get(article.get_absolute_url())
         self.assertEqual(response.status_code, 200)
-        from DjangoBlog.spider_notify import SpiderNotify
+        from djangoblog.spider_notify import SpiderNotify
         SpiderNotify.notify(article.get_absolute_url())
         response = self.client.get(tag.get_absolute_url())
         self.assertEqual(response.status_code, 200)
@@ -97,12 +98,7 @@ class ArticleTest(TestCase):
         s = load_articletags(article)
         self.assertIsNotNone(s)
 
-        rsp = self.client.get('/refresh')
-        self.assertEqual(rsp.status_code, 302)
-
         self.client.login(username='liangliangyy', password='liangliangyy')
-        rsp = self.client.get('/refresh')
-        self.assertEqual(rsp.status_code, 200)
 
         response = self.client.get(reverse('blog:archives'))
         self.assertEqual(response.status_code, 200)
@@ -123,8 +119,8 @@ class ArticleTest(TestCase):
 
         f = BlogSearchForm()
         f.search()
-        self.client.login(username='liangliangyy', password='liangliangyy')
-        from DjangoBlog.spider_notify import SpiderNotify
+        # self.client.login(username='liangliangyy', password='liangliangyy')
+        from djangoblog.spider_notify import SpiderNotify
         SpiderNotify.baidu_notify([article.get_full_url()])
 
         from blog.templatetags.blog_tags import gravatar_url, gravatar
@@ -139,17 +135,15 @@ class ArticleTest(TestCase):
         response = self.client.get('/links.html')
         self.assertEqual(response.status_code, 200)
 
-        rsp = self.client.get('/refresh')
-        self.assertEqual(rsp.status_code, 200)
-
         response = self.client.get('/feed/')
         self.assertEqual(response.status_code, 200)
 
         response = self.client.get('/sitemap.xml')
         self.assertEqual(response.status_code, 200)
-        from DjangoBlog.utils import block_code
-        block = block_code("`python`", 'python')
 
+        self.client.get("/admin/blog/article/1/delete/")
+        self.client.get('/admin/servermanager/emailsendlog/')
+        self.client.get('admin/admin/logentry/')
 
     def __check_pagination__(self, p, type, value):
         s = load_pagination_info(p.page(1), type, value)
@@ -182,18 +176,12 @@ class ArticleTest(TestCase):
             form_data = {'python.png': imgfile}
             rsp = self.client.post(
                 '/upload?sign=' + sign, form_data, follow=True)
-
             self.assertEqual(rsp.status_code, 200)
-        from DjangoBlog.utils import save_user_avatar, send_email
+        os.remove(imagepath)
+        from djangoblog.utils import save_user_avatar, send_email
         send_email(['qq@qq.com'], 'testTitle', 'testContent')
         save_user_avatar(
             'https://www.python.org/static/img/python-logo@2x.png')
-        """
-        data = SimpleUploadedFile(imagepath, b'file_content', content_type='image/jpg')
-        rsp = self.client.post('/upload', {'django.jpg': data})
-        self.assertEqual(rsp.status_code, 200)
-        SimpleUploadedFile()
-        """
 
     def test_errorpage(self):
         rsp = self.client.get('/eee')

@@ -1,35 +1,20 @@
-#!/usr/bin/env python
-# encoding: utf-8
-
-
-"""
-@version: ??
-@author: liangliangyy
-@license: MIT Licence
-@contact: liangliangyy@gmail.com
-@site: https://www.lylinux.net/
-@software: PyCharm
-@file: blog_signals.py
-@time: 2017/8/12 上午10:18
-"""
-import django
-import django.dispatch
-from django.dispatch import receiver
-from django.conf import settings
-from django.contrib.admin.models import LogEntry
-from DjangoBlog.utils import get_current_site
-from django.core.mail import EmailMultiAlternatives
-from django.db.models.signals import post_save
-from django.contrib.auth.signals import user_logged_in, user_logged_out, user_login_failed
-
-from DjangoBlog.utils import cache, send_email, expire_view_cache, delete_sidebar_cache, delete_view_cache
-from DjangoBlog.spider_notify import SpiderNotify
-from oauth.models import OAuthUser
-from blog.models import Article, Category, Tag, Links, SideBar, BlogSettings
-from comments.models import Comment
-from comments.utils import send_comment_email
 import _thread
 import logging
+
+import django.dispatch
+from django.conf import settings
+from django.contrib.admin.models import LogEntry
+from django.contrib.auth.signals import user_logged_in, user_logged_out
+from django.core.mail import EmailMultiAlternatives
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+
+from djangoblog.spider_notify import SpiderNotify
+from djangoblog.utils import cache, expire_view_cache, delete_sidebar_cache, delete_view_cache
+from djangoblog.utils import get_current_site
+from comments.models import Comment
+from comments.utils import send_comment_email
+from oauth.models import OAuthUser
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +46,7 @@ def send_email_signal_handler(sender, **kwargs):
         result = msg.send()
         log.send_result = result > 0
     except Exception as e:
-        logger.error(e)
+        logger.error(f"失败邮箱号: {emailto}, {e}")
         log.send_result = False
     log.save()
 
@@ -72,13 +57,11 @@ def oauth_user_login_signal_handler(sender, **kwargs):
     oauthuser = OAuthUser.objects.get(id=id)
     site = get_current_site().domain
     if oauthuser.picture and not oauthuser.picture.find(site) >= 0:
-        from DjangoBlog.utils import save_user_avatar
+        from djangoblog.utils import save_user_avatar
         oauthuser.picture = save_user_avatar(oauthuser.picture)
         oauthuser.save()
 
-    delete_sidebar_cache(oauthuser.author.username)
-
-    cache.clear()
+    delete_sidebar_cache()
 
 
 @receiver(post_save)
@@ -103,6 +86,7 @@ def model_post_save_callback(
                 logger.error("notify sipder", ex)
         if not is_update_views:
             clearcache = True
+
     if isinstance(instance, Comment):
 
         path = instance.article.get_absolute_url()
@@ -120,7 +104,7 @@ def model_post_save_callback(
         comment_cache_key = 'article_comments_{id}'.format(
             id=instance.article.id)
         cache.delete(comment_cache_key)
-        delete_sidebar_cache(instance.author.username)
+        delete_sidebar_cache()
         delete_view_cache('article_comments', [str(instance.article.pk)])
 
         _thread.start_new(send_comment_email, (instance,))
@@ -134,5 +118,5 @@ def model_post_save_callback(
 def user_auth_callback(sender, request, user, **kwargs):
     if user and user.username:
         logger.info(user)
-        delete_sidebar_cache(user.username)
-        cache.clear()
+        delete_sidebar_cache()
+        # cache.clear()

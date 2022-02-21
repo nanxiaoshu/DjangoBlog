@@ -2,28 +2,16 @@
 # encoding: utf-8
 
 
-"""
-@version: ??
-@author: liangliangyy
-@license: MIT Licence
-@contact: liangliangyy@gmail.com
-@site: https://www.lylinux.net/
-@software: PyCharm
-@file: utils.py
-@time: 2017/1/19 上午2:30
-"""
-from django.core.cache import cache
-from django.contrib.sites.models import Site
-from hashlib import sha256
-import mistune
-from mistune import escape, escape_link
-from pygments import highlight
-from pygments.lexers import get_lexer_by_name
-from pygments.formatters import html
 import logging
-import requests
-import uuid
 import os
+import random
+import string
+import uuid
+from hashlib import sha256
+
+import requests
+from django.contrib.sites.models import Site
+from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
 
@@ -100,91 +88,51 @@ def expire_view_cache(path, servername, serverport, key_prefix=None):
     return False
 
 
-def block_code(text, lang, inlinestyles=False, linenos=False):
-    '''
-    markdown代码高亮
-    :param text:
-    :param lang:
-    :param inlinestyles:
-    :param linenos:
-    :return:
-    '''
-    if not lang:
-        text = text.strip()
-        return u'<pre><code>%s</code></pre>\n' % mistune.escape(text)
-
-    try:
-        lexer = get_lexer_by_name(lang, stripall=True)
-        formatter = html.HtmlFormatter(
-            noclasses=inlinestyles, linenos=linenos
-        )
-        code = highlight(text, lexer, formatter)
-        if linenos:
-            return '<div class="highlight">%s</div>\n' % code
-        return code
-    except BaseException:
-        return '<pre class="%s"><code>%s</code></pre>\n' % (
-            lang, mistune.escape(text)
-        )
-
-
 @cache_decorator()
 def get_current_site():
     site = Site.objects.get_current()
     return site
 
 
-class BlogMarkDownRenderer(mistune.Renderer):
-    '''
-    markdown渲染
-    '''
+class CommonMarkdown:
+    @staticmethod
+    def _convert_markdown(value):
+        import markdown
+        md = markdown.Markdown(
+            extensions=[
+                'extra',
+                'codehilite',
+                'toc',
+                'tables',
+            ]
+        )
+        body = md.convert(value)
+        toc = md.toc
+        return body, toc
 
-    def block_code(self, text, lang=None):
-        # renderer has an options
-        inlinestyles = self.options.get('inlinestyles')
-        linenos = self.options.get('linenos')
-        return block_code(text, lang, inlinestyles, linenos)
+    @staticmethod
+    def get_markdown_with_toc(value):
+        body, toc = CommonMarkdown._convert_markdown(value)
+        return body, toc
 
-    def autolink(self, link, is_email=False):
-        text = link = escape(link)
-
-        if is_email:
-            link = 'mailto:%s' % link
-        if not link:
-            link = "#"
-        site = get_current_site()
-        nofollow = "" if link.find(site.domain) > 0 else "rel='nofollow'"
-        return '<a href="%s" %s>%s</a>' % (link, nofollow, text)
-
-    def link(self, link, title, text):
-        link = escape_link(link)
-        site = get_current_site()
-        nofollow = "" if link.find(site.domain) > 0 else "rel='nofollow'"
-        if not link:
-            link = "#"
-        if not title:
-            return '<a href="%s" %s>%s</a>' % (link, nofollow, text)
-        title = escape(title, quote=True)
-        return '<a href="%s" title="%s" %s>%s</a>' % (
-            link, title, nofollow, text)
-
-
-class CommonMarkdown():
     @staticmethod
     def get_markdown(value):
-        renderer = BlogMarkDownRenderer(inlinestyles=False)
-
-        mdp = mistune.Markdown(escape=True, renderer=renderer)
-        return mdp(value)
+        body, toc = CommonMarkdown._convert_markdown(value)
+        return body
 
 
 def send_email(emailto, title, content):
-    from DjangoBlog.blog_signals import send_email_signal
+    from djangoblog.blog_signals import send_email_signal
     send_email_signal.send(
         send_email.__class__,
         emailto=emailto,
         title=title,
         content=content)
+
+
+def generate_code() -> str:
+    """生成随机数验证码"""
+    return ''.join(random.sample(string.digits, 6))
 
 
 def parse_dict_to_url(dict):
@@ -202,7 +150,7 @@ def get_blog_setting():
         from blog.models import BlogSettings
         if not BlogSettings.objects.count():
             setting = BlogSettings()
-            setting.sitename = 'DjangoBlog'
+            setting.sitename = 'djangoblog'
             setting.site_description = '基于Django的博客系统'
             setting.site_seo_description = '基于Django的博客系统'
             setting.site_keywords = 'Django,Python'
@@ -229,6 +177,7 @@ def save_user_avatar(url):
     '''
     setting = get_blog_setting()
     logger.info(url)
+
     try:
         imgname = url.split('/')[-1]
         if imgname:
@@ -236,9 +185,6 @@ def save_user_avatar(url):
                 basedir=setting.resource_path, img=imgname)
             if os.path.exists(path):
                 os.remove(path)
-    except BaseException:
-        pass
-    try:
         rsp = requests.get(url, timeout=2)
         if rsp.status_code == 200:
             basepath = r'{basedir}/avatar/'.format(
@@ -259,13 +205,9 @@ def save_user_avatar(url):
         return url
 
 
-def delete_sidebar_cache(username):
-    from django.core.cache.utils import make_template_fragment_key
+def delete_sidebar_cache():
     from blog.models import LinkShowType
-    keys = (
-        make_template_fragment_key(
-            'sidebar', [
-                username + x]) for x in LinkShowType.values)
+    keys = ["sidebar" + x for x in LinkShowType.values]
     for k in keys:
         logger.info('delete sidebar key:' + k)
         cache.delete(k)
